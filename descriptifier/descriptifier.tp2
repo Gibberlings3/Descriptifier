@@ -1,0 +1,69 @@
+BACKUP ~weidu_external/backup/test~
+AUTHOR ~For help troubleshooting installation problems, go to the Sword Coast Stratagems forum at forums.gibberlings3.net.~
+AUTO_EVAL_STRINGS
+
+ALWAYS 
+   OUTER_SPRINT scsroot descriptifier
+   INCLUDE "%scsroot%/lib/always.tph"
+
+END
+
+LANGUAGE
+"English"
+ENGLISH
+ 
+ ~descriptifier/lang/english/shared.tra~
+
+
+BEGIN "SR spells" DESIGNATED 10 NO_LOG_RECORD
+
+LOAD_TRA "%scsroot%/lang/english/shared.tra"
+
+
+OUTER_SPRINT intro_text_arcane @100
+OUTER_SPRINT intro_text_divine @105
+OUTER_SPRINT title @110
+OUTER_SPRINT level_text @120
+
+LAF descriptifier_main
+    STR_VAR html_name=spell_rev_desc
+            template="files/g3_template.html"
+            title
+            level_text
+            title_func=g3_section_header
+            intro_text_arcane
+            intro_text_divine
+END
+
+BEGIN "SCS IWD spells" DESIGNATED 20 NO_LOG_RECORD
+
+LOAD_TRA "%scsroot%/lang/english/shared.tra"
+
+
+OUTER_SPRINT intro_text_arcane @200
+OUTER_SPRINT intro_text_divine @205
+OUTER_SPRINT title @210
+OUTER_SPRINT level_text @220
+
+ACTION_FOR_EACH list IN iwd_arcane iwd_divine BEGIN
+   COPY "%scsroot%/data/%list%.2da" "%workspace%"
+        COUNT_2DA_ROWS 1 rowcount
+        FOR (i=0;i<rowcount;i+=1) BEGIN
+           READ_2DA_ENTRY i 0 1 entry
+           SPRINT $spell_list_array("%entry%") ""
+        END
+   BUT_ONLY
+END
+
+
+LAF descriptifier_main
+    STR_VAR html_name=scs_iwd_desc
+            template="files/g3_template.html"
+            title
+            filter_array=spell_list_array
+            level_text
+            title_func=g3_section_header
+            intro_text_arcane
+            intro_text_divine
+END
+

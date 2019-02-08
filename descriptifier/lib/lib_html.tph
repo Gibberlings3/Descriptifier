@@ -1,0 +1,349 @@
+
+
+//////////////////////////////////////////////////////////////////////////////
+///   Input a spell, output a chunk of formatted HTML, as well as a string
+///   to include in a list
+///
+///   Set spell to either the spell resref, or the spell ids entry. You can
+///   skip the WIZARD_ or CLERIC_ bit provided it's still unambiguous (if it 
+///   isn't we default to WIZARD_).
+///
+///   Set class, class_clericonly, class_druidonly to the CSS classes for 
+///   those types of spells (default is the G3 standard used in IWDifiction)
+///
+///   Set title_class to the HTML class used to format the spell name
+///
+///   Set heshe, himher, hisher to whatever the IE tokens <PRO_HESHE>, etc,
+///   should be set to
+///
+///   Set desc_initial to whatever the translation of "Level:" is - we strip
+///   everything before this
+//////////////////////////////////////////////////////////////////////////////
+
+DEFINE_ACTION_FUNCTION desc_to_html
+     STR_VAR
+             spell=""
+             class="spell_description"
+             class_clericonly="spell_description_cleric"
+             class_druidonly="spell_description_druid"
+             title_class="h3"
+             desc_initial="Level:"
+             heshe="he/she"
+             himher="him/her"
+             hisher="his/her"
+     RET string
+         name
+         list_entry
+BEGIN
+     OUTER_SPRINT string ""
+     OUTER_SPRINT name "null"
+     OUTER_SPRINT list_entry ""
+     LAF return_spellname STR_VAR spell RET resref END
+     ACTION_IF "%resref%" STRING_COMPARE "" BEGIN
+       COPY_EXISTING "%resref%.spl" "%workspace%"
+          READ_STRREF 0x8 name
+          READ_STRREF 0x50 desc
+          READ_SHORT 0x1c type
+          PATCH_IF type=2 BEGIN
+             LPF SPL_read_unusable_druid RET value END
+             PATCH_IF value BEGIN
+                SPRINT class "%class_clericonly%"
+             END ELSE BEGIN
+                LPF SPL_read_unusable_cleric RET value END
+                PATCH_IF value BEGIN
+                   SPRINT class "%class_druidonly%"
+                END
+             END
+          END
+          SET cut=INDEX ("%desc_initial%" "%desc%")
+          INNER_PATCH_SAVE desc "%desc%" BEGIN
+             PATCH_IF cut>=0 BEGIN
+                DELETE_BYTES 0x0 cut
+             END
+             REPLACE_TEXTUALLY "\(%WNL%\|%LNL%\)" "<br>\1"
+             REPLACE_TEXTUALLY "<PRO_HESHE>" "%heshe%"
+             REPLACE_TEXTUALLY "<PRO_HISHER>" "%hisher%"
+             REPLACE_TEXTUALLY "<PRO_HIMHER>" "%himher%"
+          END
+       BUT_ONLY
+       OUTER_SPRINT string ~<p><%title_class%><a id="%resref%" name="%resref%"></a>%name%</%title_class%></p><div class="%class%"><p>%desc%</p></div>~
+       OUTER_SPRINT list_entry ~<a href="#%resref%">%name%</a>~
+     END
+END
+
+//////////////////////////////////////////////////////////////////////////////
+///  Generate HTML for all spells of a particular prefix
+//////////////////////////////////////////////////////////////////////////////
+
+DEFINE_ACTION_FUNCTION describe_spells_by_prefix
+     STR_VAR prefix=""
+             filter_array=""
+             // these arguments are passed directly to 'desc_to_html', see there for documentation
+             class="spell_description"
+             class_clericonly="spell_description_cleric"
+             class_druidonly="spell_description_druid"
+             title_class="h3"
+             desc_initial="Level:"
+             heshe="he/she"
+             himher="him/her"
+             hisher="his/her"
+     RET     level_list
+     RET_ARRAY desc_array
+BEGIN
+   ACTION_CLEAR_ARRAY desc_array
+   ACTION_CLEAR_ARRAY list_array
+   OUTER_SPRINT $desc_array("null") ""
+   ACTION_TO_LOWER prefix
+   OUTER_FOR (i=0;i<10;i+=1) BEGIN
+      OUTER_FOR (j=0;j<10;j+=1) BEGIN
+         OUTER_SPRINT resref "%prefix%%i%%j%"
+         ACTION_IF FILE_EXISTS_IN_GAME "%resref%.spl" BEGIN
+            ACTION_IF (("%filter_array%" STRING_EQUAL "" || VARIABLE_IS_SET "%filter_array%_%resref%") && !VARIABLE_IS_SET $spell_is_hidden("%resref%")) BEGIN
+                LAF desc_to_html STR_VAR spell="%resref%" class class_clericonly class_druidonly title_class desc_initial heshe himher hisher RET string name list_entry END
+                ACTION_IF "%name%" STRING_COMPARE_CASE "null" BEGIN
+                   OUTER_SPRINT $desc_array("%name%") "%string%"
+                   OUTER_SPRINT $list_array("%name%") "%list_entry%"
+                END
+            END
+         END
+      END
+   END
+   ACTION_SORT_ARRAY_INDICES desc_array LEXICOGRAPHICALLY
+   ACTION_SORT_ARRAY_INDICES list_array LEXICOGRAPHICALLY
+   OUTER_SPRINT level_list ""
+   ACTION_PHP_EACH list_array AS discard=>string BEGIN
+        ACTION_IF "%level_list%" STRING_COMPARE_CASE "" BEGIN
+           OUTER_SPRINT level_list "%level_list%, %string%"
+        END ELSE BEGIN
+           OUTER_SPRINT level_list "%string%"
+        END
+   END
+END
+
+//////////////////////////////////////////////////////////////////////////////
+///  Generate HTML for all spells of a particular type (arcane/divine)
+//////////////////////////////////////////////////////////////////////////////
+
+DEFINE_ACTION_FUNCTION describe_spells_by_type
+        STR_VAR 
+             spelltype=""
+             section_class="section"
+             level_text="Level --- Spells"  // subsection text, with '---' to be replaced by the numerical level
+             title_func="" // this function dresses the section headers for each level
+             // these arguments are passed directly to 'describe_spells_by_prefix'
+             filter_array=""
+             class="spell_description"
+             class_clericonly="spell_description_cleric"
+             class_druidonly="spell_description_druid"
+             title_class="h3"
+             desc_initial="Level:"
+             heshe="he/she"
+             himher="him/her"
+             hisher="his/her"
+        RET_ARRAY desc_array
+                  title_array
+                  spell_list_array
+BEGIN
+   ACTION_MATCH "%spelltype%" WITH
+   "arcane" BEGIN
+      OUTER_SPRINT type spwi
+   END
+   "divine" BEGIN
+      OUTER_SPRINT type sppr
+   END
+   DEFAULT
+       FAIL "unrecognised spell type in 'describe_spells_by_type' function"
+   END
+   ACTION_CLEAR_ARRAY desc_array
+   ACTION_CLEAR_ARRAY title_array
+   ACTION_CLEAR_ARRAY spell_list_array
+   OUTER_SPRINT $desc_array("null") ""
+   OUTER_SPRINT $title_array("null") ""
+   OUTER_SPRINT $spell_list_array("null") ""
+   OUTER_FOR (level=1;level<10;level+=1) BEGIN
+       OUTER_SPRINT global_string ~~
+       OUTER_SET empty=1
+       LAF describe_spells_by_prefix STR_VAR prefix="%type%%level%" filter_array class class_clericonly class_druidonly title_class desc_initial heshe himher hisher RET level_list RET_ARRAY desc_array_here=desc_array END
+       ACTION_PHP_EACH desc_array_here AS name=>string BEGIN
+          ACTION_IF "%name%" STRING_COMPARE_CASE null BEGIN
+             ACTION_IF empty BEGIN // i.e. this is the first entry
+                 OUTER_INNER_PATCH_SAVE level_text_here "%level_text%" BEGIN
+                    REPLACE_TEXTUALLY "---" "%level%"
+                 END
+                 OUTER_SPRINT $title_array("%level%") "%level_text_here%"
+                 ACTION_IF "%title_func%" STRING_COMPARE_CASE "" BEGIN
+                    LAF "%title_func%" STR_VAR text="%level_text_here%" href="LEVEL%level%" RET head=string END
+                 END ELSE BEGIN
+                    OUTER_SPRINT head "<h2>%text%</h2>"
+                 END
+                 OUTER_SPRINT global_string ~%global_string%%head%%WNL%<div class="%section_class%">%WNL%~
+                 OUTER_SET empty=0
+             END
+             OUTER_SPRINT global_string "%global_string%%string%%WNL%"
+          END
+       END
+       ACTION_IF !empty BEGIN
+          OUTER_SPRINT global_string "%global_string%</div>"
+          OUTER_SPRINT $desc_array("%level%") "%global_string%"
+          OUTER_SPRINT $spell_list_array("%level%") "<strong>%level_text_here%:</strong> %level_list%"
+       END
+   END
+END
+
+//////////////////////////////////////////////////////////////////////////////
+///  Wrapper to generate the spell pages
+//////////////////////////////////////////////////////////////////////////////
+
+DEFINE_ACTION_FUNCTION descriptifier_main
+    INT_VAR 
+            install_arcane=1 // set to 0 to disable generation of arcane spell list
+            install_divine=1 // set to 0 to disable generation of divine spell list
+    STR_VAR 
+            html_name=""                    // html file name (will have 'arcane'/'divine' added)
+            file_root=""                    // root, relative to the outputted HTML's final location, of the resources used
+            template=""                     // the HTML template used, relative to the mod root directory
+            filter_array=""                 // array of spells to be used (optional)
+            title=""                        // the title of the pages, modified by 'arcane spells' or 'divine spells' as appropriate
+            level_text="Level --- Spells"   // the text used for each level entry
+            section_class="section"         // the class name for the top-level sections in the outputted document
+            title_func=""                   // the function that dresses the section-level titles
+            class="spell_description"                    // the classes for the individual spells
+            class_clericonly="spell_description_cleric"
+            class_druidonly="spell_description_druid"
+            title_class="h3"                             // the heading level for the individual spells
+            intro_text_divine=""                                // the text at the top of the document
+            intro_text_arcane=""
+BEGIN
+      LAM read_in_hidespl
+      OUTER_SPRINT $title_add("arcane") @10000
+      OUTER_SPRINT $title_add("divine") @10010
+      OUTER_SPRINT $intro_add("arcane") ""
+      OUTER_SPRINT $intro_add("divine") @10020
+      OUTER_SPRINT desc_initial @10030
+      ACTION_IF "%filter_array%" STRING_COMPARE_CASE "" BEGIN
+         ACTION_PHP_EACH "%filter_array%" AS spell=>discard BEGIN
+            LAF return_spellname STR_VAR spell RET resref END
+            OUTER_SPRINT $filter_resref_array("%resref%") ""
+         END
+         OUTER_SPRINT filter_array filter_resref_array
+      END
+      ACTION_FOR_EACH spelltype IN arcane divine BEGIN
+          ACTION_IF $install("%spelltype%")=1 BEGIN
+              LAF describe_spells_by_type STR_VAR spelltype title_func filter_array section_class level_text class class_clericonly class_druidonly desc_initial RET_ARRAY title_array desc_array spell_list_array END
+              LAF make_shortcut_list STR_VAR title_array  RET list END
+              LAF make_spell_list STR_VAR spell_list_array RET list2=list END
+              OUTER_SPRINT title_add $title_add("%spelltype%")
+              OUTER_SPRINT intro $intro_text("%spelltype%")
+              OUTER_SPRINT intro_add $intro_add("%spelltype%")
+              COPY "%scsroot%/%template%" "%data_loc%/%html_name%_%spelltype%.html"
+                     REPLACE_TEXTUALLY "---!!!SCS_TITLE!!!---" "%title% - %title_add%"
+                     REPLACE_TEXTUALLY "---!!!SCS_MAIN_HEADER!!!---" "%title% - %title_add%"
+                     REPLACE_TEXTUALLY "---!!!SCS_SHORTCUT_MENU!!!---" "%list%"
+                     REPLACE_TEXTUALLY "---!!!SCS_SPELL_LIST!!!---" "%list2%"
+                     REPLACE_TEXTUALLY "---!!!SCS_INTRO_TEXT!!!---" "%intro%%intro_add%"
+                     PHP_EACH desc_array AS name=>string BEGIN
+                         PATCH_IF "%name%" STRING_COMPARE_CASE null BEGIN
+                            REPLACE_TEXTUALLY "---!!!SCS_CONTENTS!!!---" "%string%---!!!SCS_CONTENTS!!!---"
+                         END
+                     END
+                     REPLACE_TEXTUALLY "---!!![^!]*!!!---" ""
+
+          END
+      END
+END
+
+//////////////////////////////////////////////////////////////////////////////
+///  Define a list, with references, of all the spell levels
+//////////////////////////////////////////////////////////////////////////////
+
+
+DEFINE_ACTION_FUNCTION make_shortcut_list
+         STR_VAR title_array=""
+                 initial_entry=""
+                 initial_href=""
+         RET list
+BEGIN
+   OUTER_SPRINT list "<ul>"
+   ACTION_IF "%initial_entry%" STRING_COMPARE_CASE "" BEGIN
+      OUTER_SPRINT list ~%list%<li><a href="%initial_href%">%initial_entry%</a></li>~
+   END
+   ACTION_PHP_EACH "%title_array%" AS level=>text BEGIN
+     ACTION_IF "%level%" STRING_COMPARE_CASE null BEGIN
+       OUTER_SPRINT list ~%list%<li><a href="#LEVEL%level%">%text%</a></li>~
+     END
+   END
+   OUTER_SPRINT list "%list%</ul>"
+END
+
+//////////////////////////////////////////////////////////////////////////////
+///  Define a list, with references, of all the spells
+//////////////////////////////////////////////////////////////////////////////
+
+
+DEFINE_ACTION_FUNCTION make_spell_list
+         STR_VAR spell_list_array=""
+         RET list
+BEGIN
+   OUTER_SPRINT list "<ul>"
+   ACTION_PHP_EACH "%spell_list_array%" AS level=>text BEGIN
+     ACTION_IF "%level%" STRING_COMPARE_CASE null BEGIN
+       OUTER_SPRINT list ~%list%<li>%text%</li>~
+     END
+   END
+   OUTER_SPRINT list "%list%</ul>"
+END
+
+
+//////////////////////////////////////////////////////////////////////////////
+///  Take as input a resref, or a (possibly abbreviated) spell ids name;
+///  return the spell
+///
+///  We do a new version of this rather than using SFO code, to avoid the 
+///  overkill of SFO's loading of all spell names
+//////////////////////////////////////////////////////////////////////////////
+
+DEFINE_ACTION_FUNCTION return_spellname
+        STR_VAR spell=""
+        RET resref
+BEGIN
+     ACTION_IF FILE_EXISTS_IN_GAME "%spell%.spl" BEGIN
+         OUTER_SPRINT resref "%spell%"
+     END ELSE BEGIN
+        ACTION_IF IDS_OF_SYMBOL ("spell" "%spell%")>=0 BEGIN
+           LAF RES_NUM_OF_SPELL_NAME STR_VAR spell_name="%spell%" RET resref=spell_res END
+        END ELSE
+        ACTION_IF IDS_OF_SYMBOL ("spell" "WIZARD_%spell%")>=0 BEGIN
+           LAF RES_NUM_OF_SPELL_NAME STR_VAR spell_name="WIZARD_%spell%" RET resref=spell_res END
+        END ELSE
+        ACTION_IF IDS_OF_SYMBOL ("spell" "CLERIC_%spell%")>=0 BEGIN
+           LAF RES_NUM_OF_SPELL_NAME STR_VAR spell_name="CLERIC_%spell%" RET resref=spell_res END
+        END ELSE BEGIN
+           OUTER_SPRINT resref ""
+        END
+     END
+     ACTION_TO_LOWER resref
+END
+
+//////////////////////////////////////////////////////////////////////////////
+// define G3 formatting function for title
+//////////////////////////////////////////////////////////////////////////////
+
+DEFINE_ACTION_FUNCTION g3_section_header
+   STR_VAR text=""
+           href=""
+   RET string
+BEGIN
+   OUTER_SPRINT string ~<div class="ribbon_rectangle_h2"><h2><a name="%href%" id="%href%"></a>%text%</h2></div><div class="ribbon_triangle_h2-l"></div><div class="ribbon_triangle_h2-r"></div>~
+END
+
+//////////////////////////////////////////////////////////////////////////////
+// minimal formatting function for title
+//////////////////////////////////////////////////////////////////////////////
+
+DEFINE_ACTION_FUNCTION basic_section_header
+   STR_VAR text=""
+           href=""
+   RET string
+BEGIN
+   OUTER_SPRINT string ~<h2><a name="%href%" id="%href%"></a>%text%</h2>~
+END

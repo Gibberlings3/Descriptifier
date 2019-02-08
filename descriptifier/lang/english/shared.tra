@@ -1,0 +1,20 @@
+
+// Spell Revisions
+@100 = "<p>With Spell Revisions installed, these are the arcane spells available to characters.</p>"
+@105 = "<p>With Spell Revisions installed, these are the divine spells available to characters.</p>"
+@110 = "Spell Revisions"
+@120 = "Level --- Spells"
+
+// SCS IWD
+
+@200 = "<p>These are the arcane spells that are added or modified by SCS's 'Icewind Dale Arcane Spells' component</p>"
+@205 = "<p>These are the divine spells that are added or modified by SCS's 'Icewind Dale Divine Spells' component</p>"
+@210 = "SCS Icewind Dale spells"
+@220 = "New Level --- Spells"
+
+// Shared
+
+@10000 = "Arcane Spells"
+@10010 = "Divine Spells"
+@10020 = "<p>Druid/shaman/ranger-only spells are in green; cleric/paladin-only spells are in blue. Spells may have additional alignment restrictions noted in their descriptions. </p>"
+@10030 = "Level:"

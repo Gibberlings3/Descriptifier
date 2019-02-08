@@ -1,0 +1,41 @@
+/////////////////////////////// Fragments of SFO ///////////////////////////////////////////////////////////////////////////////////////
+
+                       DEFINE_PATCH_FUNCTION SPL_read_unusable_druid INT_VAR offset_secondary=0 offset_base=0 RET value BEGIN
+                                     PATCH_IF (BYTE_AT 0x21 BAND 128)  = 0 BEGIN
+                                        SET value=0
+                                     END ELSE BEGIN
+                                        SET value=1
+                                     END
+                       END
+
+                       DEFINE_PATCH_FUNCTION SPL_read_unusable_cleric INT_VAR offset_secondary=0 offset_base=0 RET value BEGIN
+                                     PATCH_IF (BYTE_AT 0x21 BAND 64)  = 0 BEGIN
+                                        SET value=0
+                                     END ELSE BEGIN
+                                        SET value=1
+                                     END
+                       END
+
+DEFINE_ACTION_MACRO read_in_hidespl BEGIN
+    ACTION_IF !VARIABLE_IS_SET hidespl_read_in BEGIN
+         OUTER_SET hidespl_read_in=1
+         ACTION_IF FILE_EXISTS_IN_GAME hidespl.2da BEGIN
+          COPY_EXISTING hidespl.2da "%workspace%"
+                COUNT_2DA_ROWS 1 rowcount
+                FOR (i=0;i<rowcount;i+=1) BEGIN
+                   READ_2DA_ENTRY i 0 1 entry
+                   SNPRINT 4 check "%entry%"
+                   TO_LOWER entry
+                   SPRINT $spell_is_hidden("%entry%") ""
+                END
+          BUT_ONLY
+         END
+         // hardcoded
+         OUTER_FOR (i=950;i<1000;i+=1) BEGIN
+            OUTER_SPRINT $spell_is_hidden("spwi%i%") ""
+         END
+         OUTER_FOR (i=750;i<1000;i+=1) BEGIN
+            OUTER_SPRINT $spell_is_hidden("sppr%i%") ""
+         END
+    END
+END

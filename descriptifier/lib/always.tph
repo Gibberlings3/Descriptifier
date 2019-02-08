@@ -1,0 +1,12 @@
+// define workspace et al
+
+OUTER_SPRINT workspace "weidu_external/workspace"
+MKDIR "%workspace%"
+OUTER_SPRINT data_loc "weidu_external/data/descriptifier"
+MKDIR "%data_loc%"
+
+// load HTML functions
+
+INCLUDE "%scsroot%/lib/lib_html.tph"
+INCLUDE "%scsroot%/lib/sfo_lite.tph"
+
